@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>OSM Roads Map</title>
+	
+	<script type="text/javascript" src="js/jquery-3.4.1.js"></script>
+	<script type="text/javascript" src="js/jquery-ui-1.12.1.custom/jquery-ui.js"></script>
+	<link rel="stylesheet" type="text/css" media="screen" href="js/jquery-ui-1.12.1.custom/jquery-ui.css"/>
+	
+	<script type="text/javascript" src="js/Leaflet/leaflet-src.js"></script>
+	<link rel="stylesheet" type="text/css" href="js/Leaflet/leaflet.css"/>
+	
+	<style>
+        #map {
+            float:      left;
+            min-width:  800px;
+            min-height: 600px;
+        }
+
+        #control {
+            float:      right;
+            width:      360px;
+            min-height: 600px;
+            margin:     0;
+            padding:    0;
+            overflow-y: hidden;
+        }
+
+        body {
+            width:    100%;
+            height:   100%;
+            padding:  0;
+            margin:   0;
+            overflow: hidden;
+        }
+
+        fieldset {
+            width:   95%;
+            margin:  0;
+            padding: 5px;
+        }
+
+        legend {
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+        }
+
+        table tr {
+            vertical-align: top;
+        }
+
+        table tr td {
+            text-align: left;
+        }
+
+        input {
+            width: 100%;
+        }
+
+        input[type="checkbox"] {
+            width: inherit;
+        }
+
+        input[type="radio"] {
+            width: inherit;
+        }
+
+        .chosen-select {
+            width: 100%;
+        }
+
+        textarea {
+            width: 100%;
+        }
+
+        button {
+            font-size: 12px !important;
+            width:     100%;
+            height:    100%;
+        }
+
+        div.ui-dialog {
+            width:   1000px;
+            height:  600px;
+            z-index: 10000;
+        }
+
+        .search_result table {
+            width:        100%;
+            table-layout: fixed;
+            font-size:    12px;
+        }
+
+        .search_result table th {
+            font-weight: bold;
+        }
+
+        #dialog_window_minimized_container {
+            position: fixed;
+            bottom:   0;
+            left:     0;
+            height:   30px;
+        }
+
+        .dialog_window_minimized {
+            float:        left;
+            padding:      5px 10px;
+            font-size:    12px;
+            cursor:       pointer;
+            margin-right: 2px;
+            display:      none;
+        }
+
+        .dialog_window_minimized .ui-icon {
+            display:  inline-block !important;
+            position: relative;
+            top:      3px;
+            cursor:   pointer;
+        }
+
+        .ui-dialog .ui-dialog-titlebar-minimize {
+            height:   18px;
+            width:    19px;
+            padding:  1px;
+            position: absolute;
+            right:    23px;
+            top:      9px;
+        }
+
+        .ui-dialog .ui-dialog-titlebar-minimize .ui-icon {
+            display: block;
+            margin:  1px;
+        }
+
+        .ui-dialog .ui-dialog-titlebar-minimize:hover, .ui-dialog .ui-dialog-titlebar-minimize:focus {
+            padding: 0;
+        }
+
+        .intersectBnt {
+            width: 75px;
+        }
+
+        .speed_note {
+            width:            30px !important;
+            height:           20px !important;
+            text-align:       center;
+            margin:           5px;
+            border-radius:    5px;
+            background-color: #59B4D4;
+        }
+	
+	</style>
+</head>
+
+<body onload="doMapInit()">
+<div id="map"></div>
+<div id="control">
+	
+	<fieldset>
+		<legend>Аналитика</legend>
+		<table style="border: 0; width: 100%;">
+			<tr>
+				<td><input id="roads" name="group1" type="radio" value="0" checked><label for="roads">Скоростной режим</label>
+				<td>
+			</tr>
+			<tr>
+				<td><input id="lines" name="group1" type="radio" value="1"><label for="lines">Количество полос</label>
+				<td>
+			</tr>
+			<tr>
+				<td><input id="barriers" name="group1" type="radio" value="2"><label for="barriers">Разделительные барьеры</label>
+				<td>
+			</tr>
+			<tr>
+				<td><input id="lighting" name="group1" type="radio" value="3"><label for="lighting">Освещённость</label>
+				<td>
+			</tr>
+			<tr>
+				<td><input id="crossroads" name="group1" type="radio" value="4"><label for="crossroads">Переходы</label>
+				<td>
+			</tr>
+		</table>
+	</fieldset>
+	<br>
+	
+	<!-- Легенда -->
+	<fieldset>
+		<legend>Легенда</legend>
+		<table style="border: 0; width: 100%">
+			<tr>
+				<td><input type="checkbox" id="showLabel"/></td>
+				<td><label for="showLabel">Показывать подписи на данных</label></td>
+			</tr>
+		</table>
+		<table style="border: 0; width:100%" id="legends">
+			<tr>
+				<td style="width: 50px;">&nbsp;</td>
+				<td></td>
+			</tr>
+		</table>
+	</fieldset>
+</div>
+
+<script>
+	window._debug = true;
+	
+	/**
+	 * Картографический сервис от leaflet'а
+	 * @type {L|{getCenter: Function, getZoom: Function, removeLayer: Function, setView: Function}}
+	 */
+	let map;
+	
+	//-------------------------------------------------------------------
+	
+	function _resize(){
+		let _width = window.innerWidth;
+		let _height = window.innerHeight;
+		
+		$(document.body).css({width: _width, height: _height});
+		
+		let _ctrl = $('#control');
+		_ctrl.css({height: _height});
+		
+		_ctrl.css('overflow-y', 'hidden');
+		let _ctrlW = parseInt(_ctrl.css('width'));
+		_ctrl.css('overflow-y', 'auto');
+		let _ctrlM = 0;
+		_ctrl.css('margin').split(' ').forEach(function(item){
+			_ctrlM += parseInt(item);
+		});
+		let _ctrlP = 0;
+		_ctrl.css('padding').split(' ').forEach(function(item){
+			_ctrlP += parseInt(item);
+		});
+		
+		let _map = $('#map');
+		let _mapM = 0;
+		_map.css('margin').split(' ').forEach(function(item){
+			_mapM += (parseInt(item) || 0);
+		});
+		
+		_map.css({width: _width - _ctrlW - _mapM, height: _height});
+		
+		setTimeout(function(){
+			map.invalidateSize()
+		}, 400);
+		
+	}
+	
+	/**
+	 * Инициализация карты
+	 * @private
+	 */
+	function doMapInit(){
+		try{
+			/**
+			 * //Создаём и запускает картографию
+			 * @type {HTMLDivElement}
+			 */
+			map = L.map('map').setView([55, 35], 5);  //Центрирование на центре зоны ответственности
+			L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(map);    // Адрес тайлов и максимальный зум
+			L.control.scale({imperial: false}).addTo(map);  //Масштабная линейка
+			
+			map.on('zoomend', onZoom);
+			map.on('moveend', onMove);
+			
+			$('#showLabel').on('change', onShowLabelChange);
+			$('input[name="group1"]').on('change', getData);
+			
+			_resize();
+			$(window).resize(_resize);
+			onZoom();
+			
+			//Разбор входных патаметров
+			let _params = {};
+			window.location.search.substr(1).split('&').forEach(el => {
+				let p = (el || '').split('=');
+				_params[p[0]] = p[1];
+			});
+			
+			let _osm_id = parseInt(_params.osm_id, 10);
+			let _townName = decodeURI(_params.town);
+			if(!Number.isNaN(_osm_id) || _townName){
+				$.post(
+					'/getter.php',
+					{mode: 5, osm_id: _osm_id, town: _townName.toUpperCase()},
+					showTown,
+					'json');
+			}
+			
+			let lat = parseFloat(_params.lat);
+			let lng = parseFloat(_params.lng);
+			let zoom = parseInt(_params.zoom, 10);
+			if(!Number.isNaN(lat) && !Number.isNaN(lng) && !Number.isNaN(zoom)){
+				map.setView([lat, lng], zoom);
+			}
+			
+			let _mode = parseInt(_params.mode, 10);
+			if(!Number.isNaN(_mode)){
+				$('input[name="group1"][value="'+_mode+'"]').prop('checked', true);
+			}
+			
+		}catch(err){
+			if(window._debug){
+				alert(err.description || err);
+			}
+		}
+	}
+	
+	let iShowZoom = 14;
+	
+	function isShowData(){
+		return map.getZoom() >= iShowZoom;
+	}
+	
+	function onZoom(evnt){
+		if(isShowData()){
+			$('#showLabel').prop('disabled', false);
+			$('input[name="group1"]').prop('disabled', false);
+			getData();
+			
+		}else{
+			$('#showLabel').prop('disabled', true);
+			$('input[name="group1"]').prop('disabled', true);
+			removeLayer();
+		}
+	}
+	
+	function onMove(evnt){
+		isShowData() && getData();
+	}
+	
+	//-------------------------------------------------------------------
+	
+	function removeLayer(){
+		dataLayer && dataLayer.remove && dataLayer.remove();
+		labelLyr && labelLyr.remove && labelLyr.remove();
+		towersLyr && towersLyr.remove && towersLyr.remove();
+	}
+	
+	function getData(){
+		let _params = {
+			mode: $('input[name="group1"]:checked').val()
+		};
+		
+		let _bound = map.getBounds();
+		_params.bounds = [_bound._northEast.lat, _bound._northEast.lng, _bound._southWest.lat, _bound._southWest.lng].join('|');
+		
+		$.post(
+			'/getter.php',
+			_params,
+			showData,
+			'json');
+	}
+	
+	let mainLyr;
+	let dataLayer;
+	let labelLyr;
+	let towersLyr;
+	let townLyr;
+	
+	let legends;
+	let colors = ['#00d9ff', '#00a6ff', '#006fff', '#0066ff',
+	              '#ff6200', '#ff4d00', '#ff2600', '#ff0000',
+	              '#ffd500', '#dd00ff', '#b5ff00', '#07ff00'];
+	let geoDATA;
+	
+	function createGeomLabel(feature){
+		let _l = (feature.properties.l || '').toUpperCase().split(';')[0];
+		if(_l){
+			let _icon = L.icon({iconSize: [32, 32], iconAnchor: [16, 16]});
+			switch(geoDATA.mode){
+				case 0: //Скоростной режим
+					switch(_l){
+						case '5': case 'LIVING_STREET': case 'RU:LIVING_STREET':
+							_icon.options.iconUrl = '/img/maxspeed/5.svg';
+							break;
+						case '10':
+							_icon.options.iconUrl = '/img/maxspeed/10.svg';
+							break;
+						case '15':
+							_icon.options.iconUrl = '/img/maxspeed/15.svg';
+							break;
+						case '20':
+							_icon.options.iconUrl = '/img/maxspeed/20.svg';
+							break;
+						case '25':
+							_icon.options.iconUrl = '/img/maxspeed/25.svg';
+							break;
+						case '30':
+							_icon.options.iconUrl = '/img/maxspeed/30.svg';
+							break;
+						case '35':
+							_icon.options.iconUrl = '/img/maxspeed/35.svg';
+							break;
+						case '40':
+							_icon.options.iconUrl = '/img/maxspeed/40.svg';
+							break;
+						case '45':
+							_icon.options.iconUrl = '/img/maxspeed/45.svg';
+							break;
+						case '50':
+							_icon.options.iconUrl = '/img/maxspeed/50.svg';
+							break;
+						case '55':
+							_icon.options.iconUrl = '/img/maxspeed/55.svg';
+							break;
+						case '60': case 'RU:URBAN':
+							_icon.options.iconUrl = '/img/maxspeed/60.svg';
+							break;
+						case '70':
+							_icon.options.iconUrl = '/img/maxspeed/70.svg';
+							break;
+						case '80':
+							_icon.options.iconUrl = '/img/maxspeed/80.svg';
+							break;
+						case '90': case 'RU:RURAL':
+							_icon.options.iconUrl = '/img/maxspeed/90.svg';
+							break;
+						case '100':
+							_icon.options.iconUrl = '/img/maxspeed/100.svg';
+							break;
+						case '105':
+							_icon.options.iconUrl = '/img/maxspeed/105.svg';
+							break;
+						case '110': case 'RU:MOTORWAY':
+							_icon.options.iconUrl = '/img/maxspeed/110.svg';
+							break;
+						case '120':
+							_icon.options.iconUrl = '/img/maxspeed/120.svg';
+							break;
+						case '130':
+							_icon.options.iconUrl = '/img/maxspeed/130.svg';
+							break;
+						case '150':
+							_icon.options.iconUrl = '/img/maxspeed/150.svg';
+							break;
+						default:
+							_icon = L.divIcon({html: _l, className: 'speed_note', bgPos: [0, 0]});
+					}
+					break;
+				
+				default:
+					_icon = L.divIcon({html: _l, className: 'speed_note', bgPos: [0, 0]});
+					break;
+			}
+			
+			return L.marker([feature.properties.p_lat, feature.properties.p_lng], {icon: _icon});
+		}
+	}
+	
+	function showData(res){
+		removeLayer();
+		
+		geoDATA = res.result;
+		switch(geoDATA.mode){
+			case 0:
+			case 1:
+			case 3:
+			case 4:
+				legends = [];
+				let _l = $('#legends').html('');
+				for(let i = 0; i < geoDATA.dicts.dict1.length; i++){
+					legends.push({colors: colors[i], name: geoDATA.dicts.dict1[i]});
+					$('<tr><td style="background-color: ' + colors[i] + '; width: 50px;">&nbsp;</td><td>' + geoDATA.dicts.dict1[i] + '</td></tr>').appendTo(_l);
+				}
+				
+				mainLyr = L.featureGroup().addTo(map);
+				labelLyr = L.featureGroup();
+				towersLyr = L.featureGroup();
+				
+				let _showLabel = $('#showLabel').prop('checked');
+				dataLayer = L.geoJSON(geoDATA.geoms, {
+					pointToLayer: function(geoJsonPoint, latlng){
+						switch(geoDATA.mode){
+							case 4:
+								let _crossing = geoJsonPoint.properties.l;
+								let _icon;
+								switch(_crossing){
+									case 'traffic_signals':
+										_icon = L.icon({iconUrl: '/img/signs/1.8.svg', iconSize: [26, 26], iconAnchor: [13, 13]});
+										break;
+									
+									case 'uncontrolled':
+									case 'marked':
+									case 'zebra':
+										_icon = L.icon({iconUrl: '/img/signs/5.19.1.svg', iconSize: [26, 26], iconAnchor: [13, 13]});
+										break;
+									
+									case 'no':
+									case null:
+									case '':
+									case 'unmarked':
+										_icon = L.icon({iconUrl: '/img/signs/1.33.svg', iconSize: [26, 26], iconAnchor: [13, 13]});
+										break;
+									
+									default:
+										return L.circle(latlng, 2);
+								}
+								return L.marker(latlng, {icon: _icon});
+							
+							default:
+								return L.circle(latlng, 2);
+						}
+					},
+					
+					onEachFeature: function(feature, layer){
+						let _color = colors[legends.findIndex(el => el.name === feature.properties.l)];
+						layer.setStyle && layer.setStyle({'color': _color});
+						
+						if(_showLabel && geoDATA.mode !== 4){
+							let _lbl = createGeomLabel(feature);
+							_lbl && _lbl.addTo(labelLyr);
+						}
+						
+						if(feature.properties.pp){
+							L.geoJSON(JSON.parse(feature.properties.pp), {
+								pointToLayer: function(geoJsonPoint, latlng){
+									return L.circle(latlng, 5, {color: 'red'});
+								}
+							}).addTo(towersLyr);
+						}
+					}
+				});
+				
+				dataLayer.addTo(mainLyr);
+				labelLyr.addTo(mainLyr);
+				towersLyr.addTo(mainLyr);
+				break;
+			
+			case 2:
+				break;
+		}
+	}
+	
+	function onShowLabelChange(evnt){
+		if(isShowData()){
+			if($('#showLabel').prop('checked')){
+				if(geoDATA && geoDATA.geoms && geoDATA.geoms.features){
+					switch(geoDATA.mode){
+						case 0:
+						case 1:
+						case 3:
+							for(let i = 0; i < geoDATA.geoms.features.length; i++){
+								let _lbl = createGeomLabel(geoDATA.geoms.features[i]);
+								_lbl && _lbl.addTo(labelLyr);
+							}
+							break;
+						
+						case 4:
+						case 2:
+							break;
+					}
+				}
+			}else{
+				labelLyr && labelLyr.eachLayer(function(layer){
+					layer.remove();
+				});
+			}
+		}
+	}
+
+	function showTown(res){
+		let geoJSON = res && res.result;
+		if(geoJSON){
+			townLyr = L.geoJSON(geoJSON);
+			window.setTimeout(() => {
+				map.fitBounds(townLyr.getBounds());
+				townLyr.remove();
+			}, 100);
+		}
+	}
+</script>
+</body>
+</html>
