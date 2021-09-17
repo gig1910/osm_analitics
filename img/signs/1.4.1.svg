@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg version="1.1"
+	 xmlns="http://www.w3.org/2000/svg"
+	 x="0px" y="0px" viewBox="0 0 141.7 283.5" enable-background="new 0 0 141.7 283.5" xml:space="preserve">
+<g>
+	<path fill-rule="evenodd" clip-rule="evenodd" fill="#FFFFFF" stroke="#000000" stroke-width="0.5669" stroke-miterlimit="22.9256" d="
+		M17.8,0h106.1c9.8,0,17.8,8,17.8,17.8v247.9c0,9.8-8,17.8-17.8,17.8H17.8c-9.8,0-17.8-8-17.8-17.8V17.8C0,8,8,0,17.8,0L17.8,0z"/>
+	<path fill-rule="evenodd" clip-rule="evenodd" d="M17.8,4h106.1c7.6,0,13.8,6.2,13.8,13.8v247.9c0,7.6-6.2,13.8-13.8,13.8H17.8
+		c-7.6,0-13.8-6.2-13.8-13.8V17.8C4,10.2,10.2,4,17.8,4L17.8,4z M17.8,8.5h106.1c5.1,0,9.3,4.2,9.3,9.3v247.9c0,5.1-4.2,9.3-9.3,9.3
+		H17.8c-5.1,0-9.3-4.2-9.3-9.3V17.8C8.5,12.7,12.7,8.5,17.8,8.5L17.8,8.5z"/>
+	<path fill-rule="evenodd" clip-rule="evenodd" fill="#B92B1E" d="M133.3,177L8.4,248.4v-29.6l124.8-71.4V177L133.3,177z
+		 M133.3,120.8L8.4,192.2v-29.6l124.8-71.4V120.8L133.3,120.8z M133.3,64.7L8.4,136.1v-29.6l124.8-71.4V64.7L133.3,64.7z"/>
+</g>
+</svg>

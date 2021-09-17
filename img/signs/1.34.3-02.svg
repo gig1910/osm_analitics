@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg version="1.1"
+	 xmlns="http://www.w3.org/2000/svg"
+	 x="0px" y="0px" viewBox="0 0 146.4 55.6" enable-background="new 0 0 146.4 55.6" xml:space="preserve">
+<g>
+	
+		<polygon fill-rule="evenodd" clip-rule="evenodd" fill="#FFFFFF" stroke="#000000" stroke-width="0.5669" stroke-miterlimit="22.9256" points="
+		0,0 146.4,0 146.4,55.6 0,55.6 0,0 	"/>
+	<path fill-rule="evenodd" clip-rule="evenodd" fill="#B92B1E" d="M118.5,4.6l23.2,23.2V4.6H118.5L118.5,4.6z M118.5,50.9l23.2-23.2
+		v23.2H118.5L118.5,50.9z M52.6,4.6H91h5l23.2,23.2L96,50.9h-5H52.6h-2.2L27.3,27.8L50.5,4.6H52.6L52.6,4.6z M27.8,4.6L4.6,27.8V4.6
+		H27.8L27.8,4.6z M27.8,50.9L4.6,27.8v23.2H27.8L27.8,50.9z"/>
+</g>
+</svg>
