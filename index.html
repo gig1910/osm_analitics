@@ -301,7 +301,7 @@
 			
 			let _mode = parseInt(_params.mode, 10);
 			if(!Number.isNaN(_mode)){
-				$('input[name="group1"][value="'+_mode+'"]').prop('checked', true);
+				$('input[name="group1"][value="' + _mode + '"]').prop('checked', true);
 			}
 			
 		}catch(err){
@@ -364,9 +364,59 @@
 	let townLyr;
 	
 	let legends;
-	let colors = ['#00d9ff', '#00a6ff', '#006fff', '#0066ff',
-	              '#ff6200', '#ff4d00', '#ff2600', '#ff0000',
-	              '#ffd500', '#dd00ff', '#b5ff00', '#07ff00'];
+	let colors = {
+		0: {
+			'5':        '#07FF00',
+			'10':       '#55FF00',
+			'15':       '#AAFF00',
+			'20':       '#99FF00',
+			'25':       '#C8FF00',
+			'30':       '#C8FF00',
+			'35':       '#FFFB00',
+			'40':       '#FFEA00',
+			'45':       '#FFB700',
+			'50':       '#FF9100',
+			'55':       '#FF8800',
+			'60':       '#FF9100',
+			'RU:URBAN': '#FF9100',
+			'65':       '#FF6200',
+			'70':       '#B34913',
+			'75':       '#C7481A',
+			'80':       '#D45027',
+			'90':       '#FF6200',
+			'RU:RURAL': '#FF6200',
+			'100':      '#FF5900',
+			'105':      '#FF4400',
+			'110':      '#FF1E00',
+			'120':      '#FF0000',
+			'150':      '#FF0000',
+			'':         '#0F0F0F',
+			'null':     '#0F0F0F'
+		},
+		1: {
+			'1':    '#07FF00',
+			'2':    '#07FF00',
+			'3':    '#07FF00',
+			'4':    '#07FF00',
+			'5':    '#07FF00',
+			'6':    '#07FF00',
+			'7':    '#07FF00',
+			'8':    '#07FF00',
+			'9':    '#07FF00',
+			'10':   '#07FF00',
+			'':     '#0F0F0F'
+		},
+		3: {
+			'YES':  '#07FF00',
+			'NO':   '#FF5900',
+			'':     '#0F0F0F'
+		},
+		4: {
+			'YES':  '#07FF00',
+			'':     '#0F0F0F'
+		}
+	};
+	
 	let geoDATA;
 	
 	function createGeomLabel(feature){
@@ -376,7 +426,9 @@
 			switch(geoDATA.mode){
 				case 0: //Скоростной режим
 					switch(_l){
-						case '5': case 'LIVING_STREET': case 'RU:LIVING_STREET':
+						case '5':
+						case 'LIVING_STREET':
+						case 'RU:LIVING_STREET':
 							_icon.options.iconUrl = '/img/maxspeed/5.svg';
 							break;
 						case '10':
@@ -409,7 +461,8 @@
 						case '55':
 							_icon.options.iconUrl = '/img/maxspeed/55.svg';
 							break;
-						case '60': case 'RU:URBAN':
+						case '60':
+						case 'RU:URBAN':
 							_icon.options.iconUrl = '/img/maxspeed/60.svg';
 							break;
 						case '70':
@@ -418,7 +471,8 @@
 						case '80':
 							_icon.options.iconUrl = '/img/maxspeed/80.svg';
 							break;
-						case '90': case 'RU:RURAL':
+						case '90':
+						case 'RU:RURAL':
 							_icon.options.iconUrl = '/img/maxspeed/90.svg';
 							break;
 						case '100':
@@ -427,7 +481,8 @@
 						case '105':
 							_icon.options.iconUrl = '/img/maxspeed/105.svg';
 							break;
-						case '110': case 'RU:MOTORWAY':
+						case '110':
+						case 'RU:MOTORWAY':
 							_icon.options.iconUrl = '/img/maxspeed/110.svg';
 							break;
 						case '120':
@@ -465,8 +520,8 @@
 				legends = [];
 				let _l = $('#legends').html('');
 				for(let i = 0; i < geoDATA.dicts.dict1.length; i++){
-					legends.push({colors: colors[i], name: geoDATA.dicts.dict1[i]});
-					$('<tr><td style="background-color: ' + colors[i] + '; width: 50px;">&nbsp;</td><td>' + geoDATA.dicts.dict1[i] + '</td></tr>').appendTo(_l);
+					legends.push({colors: colors[geoDATA.mode][geoDATA.dicts.dict1[i]], name: geoDATA.dicts.dict1[i]});
+					$('<tr><td style="background-color: ' + colors[geoDATA.mode][geoDATA.dicts.dict1[i]] + '; width: 50px;">&nbsp;</td><td>' + geoDATA.dicts.dict1[i] + '</td></tr>').appendTo(_l);
 				}
 				
 				mainLyr = L.featureGroup().addTo(map);
@@ -509,7 +564,8 @@
 					},
 					
 					onEachFeature: function(feature, layer){
-						let _color = colors[legends.findIndex(el => el.name === feature.properties.l)];
+						let _v = (feature.properties.l || '').toUpperCase()
+						let _color = colors[geoDATA.mode][_v];
 						layer.setStyle && layer.setStyle({'color': _color});
 						
 						if(_showLabel && geoDATA.mode !== 4){
@@ -563,7 +619,7 @@
 			}
 		}
 	}
-
+	
 	function showTown(res){
 		let geoJSON = res && res.result;
 		if(geoJSON){
