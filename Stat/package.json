@@ -1,0 +1,19 @@
+{
+  "name": "osm_diff",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "node-fetch": "^3.0.0",
+    "pg": "^8.7.1",
+    "xmldom": "^0.6.0",
+    "xpath": "^0.0.32"
+  },
+  "type": "module"
+}
