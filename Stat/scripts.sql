@@ -50,38 +50,6 @@ create table history
 grant all on history to public;
 create index idx_history_timestamp on history (timestamp);
 
-insert into history
-select mode,
-       (regexp_match(XPATH('.', T.NODE)::TEXT, '\s*<([a-zA-Z0-9]+)\s', 'im'))[1]        as n_name,
-       ((xpath('//@id', T.NODE))[1]::TEXT)::bigint                                      as id,
-       ((xpath('//@version', T.NODE))[1]::TEXT)::int                                    as version,
-       ((xpath('//@timestamp', T.NODE))[1]::TEXT)::timestamp                            as timestamp,
-       ((xpath('//@uid', T.NODE))[1]::TEXT)::bigint                                     as uid,
-       ((xpath('//@user', T.NODE))[1]::TEXT)::TEXT                                      as osm_user,
-       ((xpath('//@changeset', T.NODE))[1]::TEXT)::bigint                               as changeset,
-       ((xpath('//@lat', T.NODE))[1]::TEXT)::numeric                                    as lat,
-       ((xpath('//@lon', T.NODE))[1]::TEXT)::numeric                                    as lon,
-       hstore((xpath('//tag/@k', T.NODE))::TEXT[], (xpath('//tag/@v', T.NODE))::TEXT[]) as tags,
-       ((xpath('//nd/@ref', T.NODE))::text[])::bigint[]                                 as nodes,
-       json_build_array(array(
-		       select json_build_object(
-				              'type', (xpath('//@type', M.EL))[1]::TEXT,
-				              'ref', (xpath('//@ref', M.EL))[1]::TEXT::BIGINT,
-				              'role', (xpath('//@role', M.EL))[1]::TEXT
-			              )
-		       from unnest(xpath('//member', T.NODE)) as M(EL)
-	       )) -> 0                                                                      as members
-
-from (
-	     SELECT (regexp_match(XPATH('.', XML.ROW)::TEXT, '\s*<(.*?)>', 'im'))[1] as mode,
-	            unnest(xpath('/*/*', XML.ROW))                                   AS NODE
-	     FROM UNNEST(XPATH('/osmChange/*', XMLPARSE(DOCUMENT
-	                                                CONVERT_FROM(
-			                                                PG_READ_BINARY_FILE('/var/osm/XML/000.osc'),
-			                                                'UTF8')
-		     ))) AS XML(ROW)
-     ) T;
-
 ----------------------------------------------------
 
 -- Создаём таблицу для расчётов (она как копия таблицы с историей, но с индексами и прочими дополнениями)
@@ -122,8 +90,6 @@ analyse hist;
 
 --Переносим последние дозагруженные данные
 insert into hist select * from history where timestamp > (select max(timestamp) from hist) on conflict do nothing;
-
-update hist set point_is_set = true where point_is_set is null;
 
 analyse hist;
 
@@ -1039,3 +1005,131 @@ from (
 		     ]::text[])
 	     group by id, osm_user, mode) T3
 group by t3.osm_user, t3.mode;
+
+
+-----------
+
+--Из первички выделяем изменения по интересующим нас тегам и выставляем соответствующий флаг
+select id,
+       version,
+       mode,
+       osm_user,
+       case
+	       when roads is not null and
+	            (roads <> lag(roads) over (partition by id order by version) or lag(roads) over (partition by id order by version) is null)
+		       then 1
+	       else 0 end as road_chng,
+       case
+	       when bus_stop is not null and
+	            (bus_stop <> lag(bus_stop) over (partition by id order by version) or lag(bus_stop) over (partition by id order by version) is null)
+		       then 1
+	       else 0 end as bus_stop_chng,
+       case
+	       when hw_bus_stop is not null and
+	            (hw_bus_stop <> lag(hw_bus_stop) over (partition by id order by version) or lag(hw_bus_stop) over (partition by id order by version) is null)
+		       then 1
+	       else 0 end as hw_bus_stop_chng,
+       case
+	       when lines is not null and
+	            (lines <> lag(lines) over (partition by id order by version) or lag(lines) over (partition by id order by version) is null)
+		       then 1
+	       else 0 end as lines_chng,
+       case
+	       when lit is not null and
+	            (lit <> lag(lit) over (partition by id order by version) or lag(lit) over (partition by id order by version) is null)
+		       then 1
+	       else 0 end as lit_chng,
+       case
+	       when maxspeed is not null and
+	            (maxspeed <> lag(maxspeed) over (partition by id order by version) or lag(maxspeed) over (partition by id order by version) is null)
+		       then 1
+	       else 0 end as maxspeed_chng,
+       case
+	       when crossing_island is not null and
+	            (crossing_island <> lag(crossing_island) over (partition by id order by version) or lag(crossing_island) over (partition by id order by version) is null)
+		       then 1
+	       else 0 end as crossing_island_chng,
+       case
+	       when traffic_calming is not null and
+	            (traffic_calming <> lag(traffic_calming) over (partition by id order by version) or lag(traffic_calming) over (partition by id order by version) is null)
+		       then 1
+	       else 0 end as traffic_calming_chng,
+       case
+	       when crossing is not null and
+	            (crossing <> lag(crossing) over (partition by id order by version) or lag(crossing) over (partition by id order by version) is null)
+		       then 1
+	       else 0 end as crossing_chng
+from (
+	     -- Первичка. Оббираем только те изменения, которые находятся на территории РФ и только с даты старта конкурса
+	     select osm_user,
+	            id,
+	            version,
+	            mode,
+	            case
+		            when tags -> 'highway' = any (ARRAY ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'tertiary_link', 'unclassified',
+			            'living_street', 'residential', 'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'service']::TEXT[]) then tags -> 'highway'
+		            else null end                                                              as roads,
+	            case when tags -> 'highway' = 'bus_stop' then tags -> 'highway' else null end  as bus_stop,
+	            case when tags -> 'crossing' = 'bus_stop' then tags -> 'highway' else null end as hw_bus_stop,
+	            tags -> 'lines'                                                                as lines,
+	            tags -> 'lit'                                                                  as lit,
+	            tags -> 'maxspeed'                                                             as maxspeed,
+	            tags -> 'crossing:island'                                                      as crossing_island,
+	            tags -> 'traffic_calming'                                                      as traffic_calming,
+	            tags -> 'crossing'                                                             as crossing
+	     from hist
+	     where (tags ? 'highway'
+		     or tags ? 'lines'
+		     or tags ? 'lit'
+		     or tags ? 'maxspeed'
+		     or tags ? 'crossing:island'
+		     or tags ? 'traffic_calming'
+		     or tags ? 'crossing')
+		   and st_within(point, (select way from places where admin_level = 2 limit 1))
+		   and timestamp >= '10.09.2021'::TIMESTAMP
+     ) T1
+
+---------------
+
+select id,
+       version,
+       tags,
+       st_geometrytype(point),
+       st_transform(point, 4326)                                                  point,
+       st_transform(st_makeLine(array(select (st_dumppoints(point)).geom)), 4326) line
+from hist
+where n_name = 'way'
+  and st_geometryType(point) = 'ST_MultiPoint'
+  and st_within(point, (select way from places where admin_level = '2'))
+order by id, version
+limit 100;
+
+select osm_user, /*to_char(timestamp, 'DD.MM') as day,*/ count(*)
+from hist
+where tags ? 'maxspeed:type'
+  and osm_user = ANY (array [
+	'Kachkaev','fndoder','New-Yurok','evgenykatyshev','ceekay80','Shoorick','Uralla','Антон007','AlexanderZuevVlg','ks1v','Alexey Sirotkin','vgrekhov','Никитин Николай',
+	'AleksandrB007','literan', 'weary_cynic','pudov_maxim','n-klyshko','Глеб','SoNick_RND','pfg21','fofanovamv','Shkoda_Ula','AsySmile','Daniil M','ZinaidaZ','Corsa5',
+	'nonameforme','toxat','Alex94','flexagoon','Qwertin', 'VRSS','Som','mttanya','Anatoliy Prav','messof_anegovich','ortieom','gulya_akh','MadFatVlad','TellauR','Luis_Giedroyc',
+	'shvedovskiy','Morkou','o4en_moryak','qut','sin(x)','panaramix','GermanLip', 'alexashh','DvinaLand','Валерий Зубанов','0ddo','CheySer','Jane Freud','ArsGaz','Nik Kras',
+	'ItzVektor','Sadless74','beer_absorber','sawser','ksvl','Василий Александров','Alekzzander','az09','Марья Самородская','_COOLer_','Rudennn','dmitryborzenkov','AnnMaps2019',
+	'Zema34','VORON_SPb','maslinych','Sipina anastasiya','11daf','filippov70','Ser9ei','Ilya Dontsov','yudin_aa','Const@nt','Loskir','Z_phyr','vlalexey','Nikolay Podoprigora',
+	'yaKonovalov','arina_kamm','pesec','j9j','Netdezhda','Георгий412','Lazarevsk','doofyrocks','bravebug','prmkzn','TrickyFoxy','vnogetopor','Snaark','jmty8', 'serega1103','DeKaN',
+	'YatsenkoAnton','Yury Kryvashei','sph_cow','BCNorwich','Dzindevis','Alexey369i','NetJorika','d1sr4n','pacman541','VlIvYur','Ignatych','Shortparis','IliaKrest','Ln13','LeenHis',
+	'mrKPbIS','dannyloumax','Владимир К','mshilova2003','wosk','Илюха2012','playerr17','Laavang','CupIvan','posts2000','alexeybelyalov','alievahmed','sergsmx','BusteR2712','MaksN',
+	'EkaterinaStepurko','Daria0101','Timur Gilfanov','Viacheslav Gavrilov','George897','sikmr','UrbanGleb','mishaulitskiy','ВаленВ','lord_Alpaca','borkabritva','Васильев Андрей',
+	'dom159','Calmarina','polkadastr','Vs_80','Dunaich','Заур Гитинов','Айнур Мифтахов','Polina Korolchuk','Екатерина Леттиева','Александр Камашев','Nika_no','Evgeniy Starobinets',
+	'Allin.kindA','Андрей_Горшков','Фред-Продавец звёзд','4monstrik', 'ann.sk29','yorik_iv','Сержикulsk','Vanchelo','Sanchos159','ЭндрюГарфилд','Леонид1997','Olga_E','tuhgus',
+	'Aluxantis','Sophie_Framboise','Roma_Boyko','byBAC','polich','@classistrip','konovalova2207','ольга сновская','RadmirSad','Аханов Дмитрий','Куртуков Константин','dbrwin',
+	'Васи Лий','kangu10','pe_skin','ra44o','rukus97','adonskoi','Flonger','ALeXiOZZZ','nikitadnlnk','silverst0ne','Rybaso','p_cepheus','Дядя Ваня Saw','Zacky27','Arrrriva',
+	'earnestmaps','Sandrro','simsanutiy','PashArt','sqopa','Ольга Коняева','voilashechkin','rasscrom','alexcheln','Augusto Pinochet','Халида1','Анна Алексеева','lembit@bitrix24.ru',
+	'Ержанчик','dergilyova','epidzhx','Laperuza712','ekaterina_tei','dezdichado','mira5o','нету','Аня Жаксыбаева','Alex_Boro','Lichtenblaster','germangac','mitya9697','Woislav',
+	'Ershovns','DmitriySaw','MatveyBub','Beshanian','nagor_ant','Artur Petrosian','Sysertchanin','МаринаZhucheva','k7223451','rybkolub','Elemzal','petelya','vrodetema',
+	'Alexander Rublewski','Belousov Alexis','fendme','Mapkbee','haskini','moonstar-kate','Роман Платунов','alena_light28','Ranas','klrnv','Lina_Shpileva_GIS','ArtemVart',
+	'evgenia_osm','subjectnamehere','АлисаЛалиса','Kuri Mudro','VdmrO','Kron418','kasimov.an@gmail.com','Pashandy','Глеб Серебряный','Teirudeag','Дарья Брондзя','tanyalotsman',
+	'pgisinet','etelinda1986','Alex77','FundaYury','alex_cherrie','2albert','не регистрируется','Полина Игнатенко','Skro11','Denis_Bakharev_98','alexander_mart','Троллейбус',
+	'deidpw','frolove','-off-','ivanbezin','Gorovaja','Arekasu','ValenVolg','полина шурупова','Матвей Гомон','Vasiliy Nazarov','EvgeniyV95','BearDan','polinapeshko',
+	'Chingis0811','Kira Utred','Vvo82','an_gorb'
+	]::text[])
+and timestamp >= '10.09.2021'::timestamp
+group by osm_user/*, to_char(timestamp, 'DD.MM')*/;
